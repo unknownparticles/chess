@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Gomoku AI</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --board-color: #dcb35c;
+            --text-color: #ffffff;
+            --info-panel-bg: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            font-weight: 300;
+            letter-spacing: 2px;
+        }
+
+        #game-container {
+            position: relative;
+            background-color: var(--board-color);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        #board {
+            display: grid;
+            grid-template-columns: repeat(15, 30px);
+            grid-template-rows: repeat(15, 30px);
+            gap: 1px;
+            background-color: #8b6e30;
+            border: 1px solid #8b6e30;
+        }
+
+        .cell {
+            width: 30px;
+            height: 30px;
+            background-color: var(--board-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+        }
+
+        .cell::before,
+        .cell::after {
+            content: '';
+            position: absolute;
+            background-color: #8b6e30;
+        }
+
+        .cell::before {
+            width: 100%;
+            height: 1px;
+            top: 50%;
+            left: 0;
+        }
+
+        .cell::after {
+            width: 1px;
+            height: 100%;
+            top: 0;
+            left: 50%;
+        }
+
+        .piece {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            z-index: 10;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .piece.black {
+            background: radial-gradient(circle at 30% 30%, #444, #000);
+        }
+
+        .piece.white {
+            background: radial-gradient(circle at 30% 30%, #fff, #ccc);
+        }
+
+        .piece.ai-last-move {
+            outline: 2px solid #ff4757;
+            outline-offset: 2px;
+        }
+
+        #info-panel {
+            margin-top: 30px;
+            padding: 15px 30px;
+            background-color: var(--info-panel-bg);
+            border-radius: 25px;
+            backdrop-filter: blur(10px);
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .status {
+            font-size: 1.1em;
+            font-weight: 500;
+        }
+
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            background-color: #4ed1c5;
+            color: #1a1a1a;
+            font-weight: bold;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.8;
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        #overlay {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 8px;
+            z-index: 100;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 2em;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Gomoku AI</h1>
+    <div id="game-container">
+        <div id="board"></div>
+        <div id="overlay">
+            <div id="winner-text"></div>
+            <button onclick="resetGame()" style="margin-top: 20px;">Play Again</button>
+        </div>
+    </div>
+    <div id="info-panel">
+        <div id="status" class="status">Your Turn (Black)</div>
+        <select id="game-select" onchange="changeGame()">
+            <option value="gomoku">Gomoku</option>
+            <option value="ttt">Tic-Tac-Toe</option>
+        </select>
+        <button onclick="resetGame()">Reset</button>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+
+</html>
