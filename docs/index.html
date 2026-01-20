@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 棋类游戏 - 五子棋 & 井字棋</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <h1 class="title">
+                <span class="title-icon">🎮</span>
+                AI 棋类游戏
+            </h1>
+            <p class="subtitle">挑战强大的 AI 对手</p>
+        </header>
+
+        <!-- Game Selection -->
+        <div class="game-selector">
+            <button class="game-btn active" data-game="gomoku">
+                <span class="game-icon">⚫</span>
+                <span class="game-name">五子棋</span>
+                <span class="game-desc">15×15 棋盘</span>
+            </button>
+            <button class="game-btn" data-game="tictactoe">
+                <span class="game-icon">❌</span>
+                <span class="game-name">井字棋</span>
+                <span class="game-desc">3×3 棋盘</span>
+            </button>
+        </div>
+
+        <!-- Game Board Container -->
+        <div class="game-container">
+            <!-- Game Info -->
+            <div class="game-info">
+                <div class="info-card">
+                    <span class="info-label">当前玩家</span>
+                    <span class="info-value" id="current-player">⚫ 黑方</span>
+                </div>
+                <div class="info-card">
+                    <span class="info-label">游戏状态</span>
+                    <span class="info-value" id="game-status">进行中</span>
+                </div>
+                <div class="info-card">
+                    <span class="info-label">AI 难度</span>
+                    <select id="ai-difficulty" class="difficulty-select">
+                        <option value="2">简单</option>
+                        <option value="3" selected>中等</option>
+                        <option value="4">困难</option>
+                        <option value="5">专家</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Canvas Board -->
+            <div class="board-wrapper">
+                <canvas id="game-board"></canvas>
+                <div class="loading-overlay" id="loading">
+                    <div class="spinner"></div>
+                    <p>AI 思考中...</p>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="controls">
+                <button class="control-btn primary" id="reset-btn">
+                    <span>🔄</span> 重新开始
+                </button>
+                <button class="control-btn secondary" id="first-player-btn">
+                    <span>🎲</span> 切换先手
+                </button>
+                <button class="control-btn secondary" id="theme-btn">
+                    <span>🌓</span> 切换主题
+                </button>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>使用 WebAssembly 技术 | C++ 游戏引擎 | Minimax AI 算法</p>
+        </footer>
+    </div>
+
+    <script src="game_module.js"></script>
+    <script src="game.js"></script>
+</body>
+
+</html>
