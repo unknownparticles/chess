@@ -42,7 +42,7 @@ public:
 
     for (int i = 0; i < height; i++) {
       for (int j = 0; j < width; j++) {
-        board.call<void>("push", engine->getCell(i, j));
+        board.call<void>("push", engine->getCell(j, i));
       }
     }
     return board;

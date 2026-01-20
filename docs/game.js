@@ -79,7 +79,11 @@ class GameUI {
         this.canvas.height = size * dpr;
         this.ctx.scale(dpr, dpr);
 
-        this.cellSize = (size - this.padding * 2) / (this.boardSize - 1);
+        if (this.gameType === 'gomoku') {
+            this.cellSize = (size - this.padding * 2) / (this.boardSize - 1);
+        } else {
+            this.cellSize = (size - this.padding * 2) / this.boardSize;
+        }
         this.displaySize = size;
     }
 
@@ -133,8 +137,14 @@ class GameUI {
         const x = e.clientX - rect.left - this.padding;
         const y = e.clientY - rect.top - this.padding;
 
-        const gridX = Math.round(x / this.cellSize);
-        const gridY = Math.round(y / this.cellSize);
+        let gridX, gridY;
+        if (this.gameType === 'gomoku') {
+            gridX = Math.round(x / this.cellSize);
+            gridY = Math.round(y / this.cellSize);
+        } else {
+            gridX = Math.floor(x / this.cellSize);
+            gridY = Math.floor(y / this.cellSize);
+        }
 
         if (gridX >= 0 && gridX < this.boardSize && gridY >= 0 && gridY < this.boardSize) {
             this.makeMove(gridX, gridY);
@@ -167,39 +177,28 @@ class GameUI {
 
     async getAIMove() {
         this.isThinking = true;
-        this.showLoading();
+
+        // Only show loading for Gomoku or if it takes time
+        if (this.gameType === 'gomoku') {
+            this.showLoading();
+        }
         this.statusText.textContent = 'AI 思考中...';
 
         // Use a small timeout to allow UI update
-        await new Promise(r => setTimeout(r, 100));
+        await new Promise(r => setTimeout(r, 50));
 
         const depth = parseInt(this.difficultySelect.value);
-        const player = this.game.getAIPlayer();
 
-        // Make move in WASM
-        const success = this.game.makeAIMove(depth);
+        // Get AI move from WASM
+        const bestMove = this.game.getAIMove(depth);
 
-        if (success) {
-            // Find what move AI made (we can get it back from board state or we could have returned it)
-            // For now, we redraw everything.
-            this.drawBoard();
+        this.isThinking = false;
+        this.hideLoading();
 
-            // We need to check win for the move AI just made
-            // This is a bit simplified, ideally getAIMove returns the coordinates
-            // Our C++ wrapper makeAIMove makes the move internaly
-
-            // To check win, we'd need the coordinates. Let's fix this in flow.
-            // For now, let's assume the game state check is enough
-
-            this.updateUI();
-            this.isThinking = false;
-            this.hideLoading();
-
-            // Check status
-            // Note: Since we don't have the last move coords easily here without tracking,
-            // we could implement a checkGameState in WASM, or just check the board.
-            // But usually checkWin is called with the last move.
-            // I've updated the UI, now let's check if the game ended.
+        if (bestMove.x !== -1 && bestMove.y !== -1) {
+            this.makeMove(bestMove.x, bestMove.y);
+        } else {
+            this.statusText.textContent = 'AI 认输或无法移动';
         }
     }
 
@@ -220,7 +219,8 @@ class GameUI {
         this.ctx.strokeStyle = lineColor;
         this.ctx.lineWidth = 1;
 
-        for (let i = 0; i < this.boardSize; i++) {
+        const lines = this.gameType === 'gomoku' ? this.boardSize : this.boardSize + 1;
+        for (let i = 0; i < lines; i++) {
             // Vertical
             this.ctx.moveTo(this.padding + i * this.cellSize, this.padding);
             this.ctx.lineTo(this.padding + i * this.cellSize, size - this.padding);
@@ -255,8 +255,14 @@ class GameUI {
     }
 
     drawPiece(x, y, player) {
-        const centerX = this.padding + x * this.cellSize;
-        const centerY = this.padding + y * this.cellSize;
+        let centerX, centerY;
+        if (this.gameType === 'gomoku') {
+            centerX = this.padding + x * this.cellSize;
+            centerY = this.padding + y * this.cellSize;
+        } else {
+            centerX = this.padding + (x + 0.5) * this.cellSize;
+            centerY = this.padding + (y + 0.5) * this.cellSize;
+        }
         const radius = this.cellSize * 0.4;
 
         this.ctx.beginPath();
