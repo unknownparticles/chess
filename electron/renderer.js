@@ -82,7 +82,7 @@ function resetGame() {
 }
 
 ipcRenderer.on('ai-response', (event, response) => {
-  const parts = response.trim().split(' ');
+  const parts = response.split(' ');
   const cmd = parts[0];
 
   if (cmd === 'switched') {
@@ -91,7 +91,11 @@ ipcRenderer.on('ai-response', (event, response) => {
   } else if (cmd === 'best') {
     const r = parseInt(parts[1], 10);
     const c = parseInt(parts[2], 10);
-    placePiece(r, c, 2);
+
+    if (!gameOver && board[r] && board[r][c] === 0) {
+      placePiece(r, c, 2);
+    }
+
     aiThinking = false;
     statusElement.innerText = 'Your Turn';
   } else if (cmd === 'win') {
@@ -105,9 +109,6 @@ ipcRenderer.on('ai-response', (event, response) => {
     aiThinking = false;
     winnerText.innerText = "It's a Draw!";
     overlay.style.display = 'flex';
-  } else if (cmd === 'error') {
-    aiThinking = false;
-    statusElement.innerText = 'AI error';
   }
 });
 
