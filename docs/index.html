@@ -96,6 +96,36 @@
         </footer>
     </div>
 
+    <div class="settlement-overlay" id="settlement-overlay" aria-hidden="true">
+        <div class="settlement-panel" role="dialog" aria-modal="true" aria-labelledby="settlement-title">
+            <button class="settlement-close" id="settlement-close" type="button" aria-label="关闭结算">×</button>
+            <p class="settlement-kicker" id="settlement-result">本局结束</p>
+            <h2 class="settlement-title" id="settlement-title">结算</h2>
+            <div class="settlement-score">
+                <span class="settlement-score-label">本轮得分</span>
+                <strong id="settlement-score">0</strong>
+                <span>分</span>
+            </div>
+            <div class="settlement-grid">
+                <div>
+                    <span>相当于</span>
+                    <strong id="settlement-level">0 级 AI</strong>
+                </div>
+                <div>
+                    <span>对手等级</span>
+                    <strong id="settlement-ai-level">0 级</strong>
+                </div>
+                <div>
+                    <span>下一局</span>
+                    <strong id="settlement-next-level">0 级</strong>
+                </div>
+            </div>
+            <button class="control-btn primary settlement-action" id="settlement-next-btn" type="button">
+                <span>↻</span> 再来一局
+            </button>
+        </div>
+    </div>
+
     <script src="game_module.js"></script>
     <script src="game.js"></script>
 </body>

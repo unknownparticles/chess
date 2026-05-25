@@ -13,6 +13,13 @@ class GameUI {
         this.difficultyValue = document.getElementById('ai-difficulty-value');
         this.lastMoveText = document.getElementById('last-move');
         this.moveRatingText = document.getElementById('move-rating');
+        this.settlementOverlay = document.getElementById('settlement-overlay');
+        this.settlementResult = document.getElementById('settlement-result');
+        this.settlementTitle = document.getElementById('settlement-title');
+        this.settlementScore = document.getElementById('settlement-score');
+        this.settlementLevel = document.getElementById('settlement-level');
+        this.settlementAILevel = document.getElementById('settlement-ai-level');
+        this.settlementNextLevel = document.getElementById('settlement-next-level');
 
         this.gameType = 'gomoku';
         this.boardSize = 15;
@@ -27,8 +34,11 @@ class GameUI {
         this.lastMove = null;
         this.currentGameRatings = [];
         this.lastGameRating = null;
+        this.hideSettlement();
         this.gameRatingHistory = this.loadGameRatingHistory();
+        this.difficultyStorageKey = 'gomoku-ai-current-level';
 
+        this.applyStoredDifficultyLevel();
         this.bindEvents();
         this.initTheme();
         this.loadWasm();
@@ -132,7 +142,23 @@ class GameUI {
         });
 
         this.difficultySelect.addEventListener('input', () => {
+            this.saveCurrentDifficultyLevel();
             this.updateDifficultyLabel();
+        });
+
+        document.getElementById('settlement-close').addEventListener('click', () => {
+            this.hideSettlement();
+        });
+
+        document.getElementById('settlement-next-btn').addEventListener('click', () => {
+            this.hideSettlement();
+            this.initGame(this.gameType);
+        });
+
+        this.settlementOverlay.addEventListener('click', (e) => {
+            if (e.target === this.settlementOverlay) {
+                this.hideSettlement();
+            }
         });
 
         window.addEventListener('resize', () => {
@@ -154,6 +180,25 @@ class GameUI {
             console.warn('评级历史读取失败，已重新开始记录', error);
             return [];
         }
+    }
+
+    applyStoredDifficultyLevel() {
+        const savedLevel = parseInt(localStorage.getItem(this.difficultyStorageKey), 10);
+        if (!Number.isNaN(savedLevel)) {
+            this.setDifficultyLevel(savedLevel);
+        }
+    }
+
+    setDifficultyLevel(level) {
+        const minLevel = parseInt(this.difficultySelect.min, 10);
+        const maxLevel = parseInt(this.difficultySelect.max, 10);
+        const safeLevel = Math.max(minLevel, Math.min(maxLevel, level));
+        this.difficultySelect.value = safeLevel;
+        localStorage.setItem(this.difficultyStorageKey, String(safeLevel));
+    }
+
+    saveCurrentDifficultyLevel() {
+        this.setDifficultyLevel(parseInt(this.difficultySelect.value, 10));
     }
 
     handleCanvasClick(e) {
@@ -381,17 +426,34 @@ class GameUI {
     }
 
     buildGameRatingRecord(winner) {
+        const aiPlayer = this.game.getAIPlayer();
+        const aiLevel = parseInt(this.difficultySelect.value, 10);
+        const clampLevel = (level) => Math.max(1, Math.min(100, level));
+
         const summarizePlayer = (player) => {
             const samples = this.currentGameRatings.filter(item => item.player === player);
             if (samples.length === 0) {
                 return { player, playerName: player === 1 ? '黑方' : '白方', level: 0, moveCount: 0 };
             }
             const total = samples.reduce((sum, item) => sum + item.level, 0);
-            const level = Math.round(total / samples.length);
+            const rawLevel = Math.round(total / samples.length);
+            let level = rawLevel;
+
+            if (player === aiPlayer) {
+                level = aiLevel;
+            } else if (winner === player) {
+                level = Math.max(rawLevel, aiLevel + 1);
+            } else if (winner === aiPlayer) {
+                level = Math.min(rawLevel, aiLevel - 1);
+            } else if (winner === 0) {
+                level = Math.min(rawLevel, aiLevel);
+            }
+
             return {
                 player,
                 playerName: player === 1 ? '黑方' : '白方',
-                level,
+                level: clampLevel(level),
+                rawLevel,
                 moveCount: samples.length
             };
         };
@@ -399,6 +461,7 @@ class GameUI {
         return {
             gameType: this.gameType,
             winner,
+            aiLevel,
             black: summarizePlayer(1),
             white: summarizePlayer(2),
             moves: this.currentGameRatings,
@@ -426,14 +489,48 @@ class GameUI {
             `黑 ${this.lastGameRating.black.level} 级 / 白 ${this.lastGameRating.white.level} 级`;
     }
 
+    advanceDifficultyAfterHumanWin(winner) {
+        if (winner === 0 || winner === this.game.getAIPlayer()) {
+            return;
+        }
+
+        // 只有玩家赢才进入下一关，失败或平局保留当前等级，避免挫败后继续升难度。
+        const currentLevel = parseInt(this.difficultySelect.value, 10);
+        this.setDifficultyLevel(currentLevel + 1);
+        this.updateDifficultyLabel();
+    }
+
+    showSettlement(msg, winner) {
+        const humanPlayer = this.game.getAIPlayer() === 1 ? 2 : 1;
+        const humanRating = humanPlayer === 1 ? this.lastGameRating.black : this.lastGameRating.white;
+        const score = humanRating.level;
+        const aiLevel = this.lastGameRating.aiLevel;
+        const nextLevel = parseInt(this.difficultySelect.value, 10);
+
+        this.settlementResult.textContent = msg;
+        this.settlementTitle.textContent = winner === humanPlayer ? '闯关成功' : '本局结算';
+        this.settlementScore.textContent = score;
+        this.settlementLevel.textContent = `${humanRating.level} 级 AI`;
+        this.settlementAILevel.textContent = `${aiLevel} 级`;
+        this.settlementNextLevel.textContent = `${nextLevel} 级`;
+        this.settlementOverlay.classList.add('active');
+        this.settlementOverlay.setAttribute('aria-hidden', 'false');
+    }
+
+    hideSettlement() {
+        this.settlementOverlay.classList.remove('active');
+        this.settlementOverlay.setAttribute('aria-hidden', 'true');
+    }
+
     endGame(msg, winner) {
         this.isGameOver = true;
         this.lastGameRating = this.buildGameRatingRecord(winner);
         this.recordGameRating(this.lastGameRating);
+        this.advanceDifficultyAfterHumanWin(winner);
         this.updateMoveRatingText();
         this.statusText.textContent = msg;
         this.statusText.style.color = 'var(--accent-secondary)';
-        setTimeout(() => alert(msg), 100);
+        this.showSettlement(msg, winner);
     }
 
     showLoading() {
