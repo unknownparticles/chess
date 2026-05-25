@@ -13,6 +13,8 @@ const int DEAD_FOUR_SCORE = 100000;
 const int LIVE_THREE_SCORE = 10000;
 const int DEAD_THREE_SCORE = 1000;
 const int LIVE_TWO_SCORE = 100;
+const int BROKEN_FOUR_SCORE = 250000;
+const int BROKEN_THREE_SCORE = 12000;
 
 static int clampLevel(int level) {
   return std::max(1, std::min(100, level));
@@ -204,6 +206,60 @@ int GomokuEngine::scorePatternAt(int x, int y, int player) const {
       fourCount++;
     if (count == 3 && openEnds == 2)
       liveThreeCount++;
+
+    for (int offset = -4; offset <= 0; ++offset) {
+      bool containsMove = false;
+      int playerCount = 0;
+      int emptyCount = 0;
+      bool blocked = false;
+
+      for (int step = 0; step < 5; ++step) {
+        int cx = x + dx[i] * (offset + step);
+        int cy = y + dy[i] * (offset + step);
+        if (cx == x && cy == y)
+          containsMove = true;
+        if (cx < 0 || cx >= BOARD_SIZE || cy < 0 || cy >= BOARD_SIZE) {
+          blocked = true;
+          break;
+        }
+        if (grid[cx][cy] == player)
+          playerCount++;
+        else if (grid[cx][cy] == EMPTY)
+          emptyCount++;
+        else {
+          blocked = true;
+          break;
+        }
+      }
+
+      if (!containsMove || blocked)
+        continue;
+
+      int beforeX = x + dx[i] * (offset - 1);
+      int beforeY = y + dy[i] * (offset - 1);
+      int afterX = x + dx[i] * (offset + 5);
+      int afterY = y + dy[i] * (offset + 5);
+      int windowOpenEnds = 0;
+      if (beforeX >= 0 && beforeX < BOARD_SIZE && beforeY >= 0 &&
+          beforeY < BOARD_SIZE && grid[beforeX][beforeY] == EMPTY)
+        windowOpenEnds++;
+      if (afterX >= 0 && afterX < BOARD_SIZE && afterY >= 0 &&
+          afterY < BOARD_SIZE && grid[afterX][afterY] == EMPTY)
+        windowOpenEnds++;
+
+      if (playerCount == 5) {
+        score += FIVE_SCORE;
+      } else if (playerCount == 4 && emptyCount == 1) {
+        score += windowOpenEnds == 2 ? BROKEN_FOUR_SCORE : DEAD_FOUR_SCORE;
+        fourCount++;
+      } else if (playerCount == 3 && emptyCount == 2 && windowOpenEnds > 0) {
+        score += windowOpenEnds == 2 ? BROKEN_THREE_SCORE : DEAD_THREE_SCORE;
+        if (windowOpenEnds == 2)
+          liveThreeCount++;
+      } else if (playerCount == 2 && emptyCount == 3 && windowOpenEnds == 2) {
+        score += LIVE_TWO_SCORE;
+      }
+    }
   }
 
   // Double threats usually force the opponent into a narrow defensive path.
@@ -247,6 +303,61 @@ int GomokuEngine::scorePatternForMove(int x, int y, int player) const {
       fourCount++;
     if (count == 3 && openEnds == 2)
       liveThreeCount++;
+
+    for (int offset = -4; offset <= 0; ++offset) {
+      bool containsMove = false;
+      int playerCount = 0;
+      int emptyCount = 0;
+      bool blocked = false;
+
+      for (int step = 0; step < 5; ++step) {
+        int cx = x + dx[i] * (offset + step);
+        int cy = y + dy[i] * (offset + step);
+        if (cx == x && cy == y)
+          containsMove = true;
+        if (cx < 0 || cx >= BOARD_SIZE || cy < 0 || cy >= BOARD_SIZE) {
+          blocked = true;
+          break;
+        }
+        int cell = (cx == x && cy == y) ? player : grid[cx][cy];
+        if (cell == player)
+          playerCount++;
+        else if (cell == EMPTY)
+          emptyCount++;
+        else {
+          blocked = true;
+          break;
+        }
+      }
+
+      if (!containsMove || blocked)
+        continue;
+
+      int beforeX = x + dx[i] * (offset - 1);
+      int beforeY = y + dy[i] * (offset - 1);
+      int afterX = x + dx[i] * (offset + 5);
+      int afterY = y + dy[i] * (offset + 5);
+      int windowOpenEnds = 0;
+      if (beforeX >= 0 && beforeX < BOARD_SIZE && beforeY >= 0 &&
+          beforeY < BOARD_SIZE && grid[beforeX][beforeY] == EMPTY)
+        windowOpenEnds++;
+      if (afterX >= 0 && afterX < BOARD_SIZE && afterY >= 0 &&
+          afterY < BOARD_SIZE && grid[afterX][afterY] == EMPTY)
+        windowOpenEnds++;
+
+      if (playerCount == 5) {
+        score += FIVE_SCORE;
+      } else if (playerCount == 4 && emptyCount == 1) {
+        score += windowOpenEnds == 2 ? BROKEN_FOUR_SCORE : DEAD_FOUR_SCORE;
+        fourCount++;
+      } else if (playerCount == 3 && emptyCount == 2 && windowOpenEnds > 0) {
+        score += windowOpenEnds == 2 ? BROKEN_THREE_SCORE : DEAD_THREE_SCORE;
+        if (windowOpenEnds == 2)
+          liveThreeCount++;
+      } else if (playerCount == 2 && emptyCount == 3 && windowOpenEnds == 2) {
+        score += LIVE_TWO_SCORE;
+      }
+    }
   }
 
   if (fourCount >= 2)

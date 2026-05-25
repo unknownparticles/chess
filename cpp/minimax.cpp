@@ -12,12 +12,40 @@ const int TT_EXACT = 0;
 const int TT_LOWER = 1;
 const int TT_UPPER = 2;
 const int TT_SIZE = 1 << 20;
+const int GOMOKU_FIVE_SCORE = 10000000;
 
 static uint64_t splitMix64(uint64_t value) {
   value += 0x9e3779b97f4a7c15ULL;
   value = (value ^ (value >> 30)) * 0xbf58476d1ce4e5b9ULL;
   value = (value ^ (value >> 27)) * 0x94d049bb133111ebULL;
   return value ^ (value >> 31);
+}
+
+static GameMove findForcedGomokuMove(GameEngine &engine,
+                                     const std::vector<GameMove> &moves,
+                                     int aiPlayer, int opponent) {
+  const GomokuEngine *gomoku = dynamic_cast<const GomokuEngine *>(&engine);
+  if (gomoku == nullptr)
+    return {-1, -1, aiPlayer, 0};
+
+  GameMove bestWin = {-1, -1, aiPlayer, -1};
+  GameMove bestBlock = {-1, -1, aiPlayer, -1};
+
+  for (const auto &move : moves) {
+    int attackScore = gomoku->scoreMoveForPlayer(move.x, move.y, aiPlayer);
+    int defenseScore = gomoku->scoreMoveForPlayer(move.x, move.y, opponent);
+    if (attackScore >= GOMOKU_FIVE_SCORE && attackScore > bestWin.score) {
+      bestWin = {move.x, move.y, aiPlayer, attackScore};
+    }
+    if (defenseScore >= GOMOKU_FIVE_SCORE &&
+        defenseScore > bestBlock.score) {
+      bestBlock = {move.x, move.y, aiPlayer, defenseScore};
+    }
+  }
+
+  if (bestWin.x != -1)
+    return bestWin;
+  return bestBlock;
 }
 
 MinimaxAI::MinimaxAI(int player) : aiPlayer(player) {
@@ -129,6 +157,11 @@ GameMove MinimaxAI::findBestMoveAdvanced(GameEngine &engine,
   std::vector<GameMove> rootMoves = engine.getPossibleMoves();
   if (rootMoves.empty())
     return {-1, -1, aiPlayer, INT_MIN};
+
+  GameMove forcedMove =
+      findForcedGomokuMove(engine, rootMoves, aiPlayer, opponent);
+  if (forcedMove.x != -1)
+    return forcedMove;
 
   GameMove bestMove = rootMoves.front();
   bestMove.player = aiPlayer;
