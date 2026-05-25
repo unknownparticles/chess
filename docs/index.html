@@ -52,12 +52,18 @@
                 </div>
                 <div class="info-card">
                     <span class="info-label">AI 难度</span>
-                    <select id="ai-difficulty" class="difficulty-select">
-                        <option value="2">简单</option>
-                        <option value="3" selected>中等</option>
-                        <option value="4">困难</option>
-                        <option value="5">专家</option>
-                    </select>
+                    <div class="difficulty-control">
+                        <input id="ai-difficulty" class="difficulty-range" type="range" min="1" max="100" value="55">
+                        <span class="difficulty-value" id="ai-difficulty-value">55 级</span>
+                    </div>
+                </div>
+                <div class="info-card">
+                    <span class="info-label">上一步棋</span>
+                    <span class="info-value" id="last-move">暂无</span>
+                </div>
+                <div class="info-card">
+                    <span class="info-label">本局评级</span>
+                    <span class="info-value" id="move-rating">结束后生成</span>
                 </div>
             </div>
 

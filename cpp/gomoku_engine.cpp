@@ -1,10 +1,22 @@
 #include "gomoku_engine.h"
 #include <algorithm>
+#include <cmath>
+#include <functional>
 
 const int EMPTY = 0;
 const int BLACK = 1;
 const int WHITE = 2;
 const int BOARD_SIZE = 15;
+const int FIVE_SCORE = 10000000;
+const int LIVE_FOUR_SCORE = 1000000;
+const int DEAD_FOUR_SCORE = 100000;
+const int LIVE_THREE_SCORE = 10000;
+const int DEAD_THREE_SCORE = 1000;
+const int LIVE_TWO_SCORE = 100;
+
+static int clampLevel(int level) {
+  return std::max(1, std::min(100, level));
+}
 
 GomokuEngine::GomokuEngine() { reset(); }
 
@@ -24,6 +36,9 @@ int GomokuEngine::getCell(int x, int y) const {
 }
 
 bool GomokuEngine::makeMove(const GameMove &move) {
+  if (move.x < 0 || move.x >= BOARD_SIZE || move.y < 0 ||
+      move.y >= BOARD_SIZE)
+    return false;
   if (grid[move.x][move.y] != EMPTY)
     return false;
   grid[move.x][move.y] = move.player;
@@ -95,95 +110,248 @@ std::vector<GameMove> GomokuEngine::getPossibleMoves() const {
             }
           }
         }
-        if (near)
-          moves.push_back({i, j, 0, 0});
+        if (near) {
+          int attackScore = scoreMoveForPlayer(i, j, BLACK);
+          int defenseScore = scoreMoveForPlayer(i, j, WHITE);
+          int center = BOARD_SIZE - std::abs(i - BOARD_SIZE / 2) -
+                       std::abs(j - BOARD_SIZE / 2);
+          moves.push_back({i, j, 0,
+                           std::max(attackScore, defenseScore) * 2 +
+                               std::min(attackScore, defenseScore) + center});
+        }
       }
     }
   }
+  std::sort(moves.begin(), moves.end(), [](const GameMove &a,
+                                           const GameMove &b) {
+    return a.score > b.score;
+  });
   return moves;
 }
 
-int GomokuEngine::evaluateLine(int count, int blocks, bool isAI) const {
-  if (count >= 5)
-    return 100000;
-  if (blocks == 2)
-    return 0;
+int GomokuEngine::countDirection(int x, int y, int dx, int dy,
+                                 int player) const {
+  int count = 0;
+  int cx = x + dx;
+  int cy = y + dy;
+  while (cx >= 0 && cx < BOARD_SIZE && cy >= 0 && cy < BOARD_SIZE &&
+         grid[cx][cy] == player) {
+    count++;
+    cx += dx;
+    cy += dy;
+  }
+  return count;
+}
 
-  int baseScore = 0;
-  if (isAI) {
-    switch (count) {
-    case 4:
-      baseScore = 1000;
+int GomokuEngine::countDirectionWithMove(int x, int y, int dx, int dy,
+                                         int player, int moveX,
+                                         int moveY) const {
+  int count = 0;
+  int cx = x + dx;
+  int cy = y + dy;
+  while (cx >= 0 && cx < BOARD_SIZE && cy >= 0 && cy < BOARD_SIZE) {
+    int cell = (cx == moveX && cy == moveY) ? player : grid[cx][cy];
+    if (cell != player)
       break;
-    case 3:
-      baseScore = 100;
+    count++;
+    cx += dx;
+    cy += dy;
+  }
+  return count;
+}
+
+int GomokuEngine::scoreRun(int count, int openEnds) const {
+  if (count >= 5)
+    return FIVE_SCORE;
+  if (openEnds == 0)
+    return 0;
+  if (count == 4)
+    return openEnds == 2 ? LIVE_FOUR_SCORE : DEAD_FOUR_SCORE;
+  if (count == 3)
+    return openEnds == 2 ? LIVE_THREE_SCORE : DEAD_THREE_SCORE;
+  if (count == 2)
+    return openEnds == 2 ? LIVE_TWO_SCORE : LIVE_TWO_SCORE / 4;
+  return openEnds == 2 ? 10 : 1;
+}
+
+int GomokuEngine::scorePatternAt(int x, int y, int player) const {
+  static const int dx[] = {1, 0, 1, 1};
+  static const int dy[] = {0, 1, 1, -1};
+  int score = 0;
+  int liveThreeCount = 0;
+  int fourCount = 0;
+
+  for (int i = 0; i < 4; ++i) {
+    int left = countDirection(x, y, -dx[i], -dy[i], player);
+    int right = countDirection(x, y, dx[i], dy[i], player);
+    int count = left + right + 1;
+    int openEnds = 0;
+    int lx = x - dx[i] * (left + 1);
+    int ly = y - dy[i] * (left + 1);
+    int rx = x + dx[i] * (right + 1);
+    int ry = y + dy[i] * (right + 1);
+
+    if (lx >= 0 && lx < BOARD_SIZE && ly >= 0 && ly < BOARD_SIZE &&
+        grid[lx][ly] == EMPTY)
+      openEnds++;
+    if (rx >= 0 && rx < BOARD_SIZE && ry >= 0 && ry < BOARD_SIZE &&
+        grid[rx][ry] == EMPTY)
+      openEnds++;
+
+    int lineScore = scoreRun(count, openEnds);
+    score += lineScore;
+    if (count == 4 && openEnds > 0)
+      fourCount++;
+    if (count == 3 && openEnds == 2)
+      liveThreeCount++;
+  }
+
+  // Double threats usually force the opponent into a narrow defensive path.
+  if (fourCount >= 2)
+    score += LIVE_FOUR_SCORE;
+  if (fourCount >= 1 && liveThreeCount >= 1)
+    score += DEAD_FOUR_SCORE;
+  if (liveThreeCount >= 2)
+    score += LIVE_THREE_SCORE * 3;
+
+  return score;
+}
+
+int GomokuEngine::scorePatternForMove(int x, int y, int player) const {
+  static const int dx[] = {1, 0, 1, 1};
+  static const int dy[] = {0, 1, 1, -1};
+  int score = 0;
+  int liveThreeCount = 0;
+  int fourCount = 0;
+
+  for (int i = 0; i < 4; ++i) {
+    int left = countDirectionWithMove(x, y, -dx[i], -dy[i], player, x, y);
+    int right = countDirectionWithMove(x, y, dx[i], dy[i], player, x, y);
+    int count = left + right + 1;
+    int openEnds = 0;
+    int lx = x - dx[i] * (left + 1);
+    int ly = y - dy[i] * (left + 1);
+    int rx = x + dx[i] * (right + 1);
+    int ry = y + dy[i] * (right + 1);
+
+    if (lx >= 0 && lx < BOARD_SIZE && ly >= 0 && ly < BOARD_SIZE &&
+        grid[lx][ly] == EMPTY)
+      openEnds++;
+    if (rx >= 0 && rx < BOARD_SIZE && ry >= 0 && ry < BOARD_SIZE &&
+        grid[rx][ry] == EMPTY)
+      openEnds++;
+
+    int lineScore = scoreRun(count, openEnds);
+    score += lineScore;
+    if (count == 4 && openEnds > 0)
+      fourCount++;
+    if (count == 3 && openEnds == 2)
+      liveThreeCount++;
+  }
+
+  if (fourCount >= 2)
+    score += LIVE_FOUR_SCORE;
+  if (fourCount >= 1 && liveThreeCount >= 1)
+    score += DEAD_FOUR_SCORE;
+  if (liveThreeCount >= 2)
+    score += LIVE_THREE_SCORE * 3;
+
+  return score;
+}
+
+int GomokuEngine::scoreMoveForPlayer(int x, int y, int player) const {
+  if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE ||
+      grid[x][y] != EMPTY)
+    return 0;
+  return scorePatternForMove(x, y, player);
+}
+
+int GomokuEngine::estimateMoveLevel(int x, int y, int player) const {
+  if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE ||
+      grid[x][y] != EMPTY)
+    return 1;
+
+  int opponent = player == BLACK ? WHITE : BLACK;
+  int selectedAttack = scoreMoveForPlayer(x, y, player);
+  int selectedDefense = scoreMoveForPlayer(x, y, opponent);
+  int selectedScore = selectedAttack * 4 + selectedDefense * 5;
+  std::vector<int> candidateScores;
+
+  for (const auto &move : getPossibleMoves()) {
+    int attack = scoreMoveForPlayer(move.x, move.y, player);
+    int defense = scoreMoveForPlayer(move.x, move.y, opponent);
+    candidateScores.push_back(attack * 4 + defense * 5);
+  }
+
+  if (candidateScores.empty())
+    return 50;
+
+  std::sort(candidateScores.begin(), candidateScores.end(), std::greater<int>());
+  int rank = 1;
+  for (int score : candidateScores) {
+    if (selectedScore >= score)
       break;
-    case 2:
-      baseScore = 10;
-      break;
-    }
-  } else {
-    switch (count) {
-    case 4:
-      baseScore = 5000;
-      break;
-    case 3:
-      baseScore = 500;
-      break;
-    case 2:
-      baseScore = 50;
-      break;
+    rank++;
+  }
+
+  int level = levelFromMoveScore(selectedScore, candidateScores.front(), rank,
+                                 moveCount);
+  if (selectedAttack >= FIVE_SCORE || selectedDefense >= FIVE_SCORE)
+    level = std::max(level, 96);
+  else if (selectedAttack >= LIVE_FOUR_SCORE ||
+           selectedDefense >= LIVE_FOUR_SCORE)
+    level = std::max(level, 90);
+  else if (selectedAttack >= DEAD_FOUR_SCORE ||
+           selectedDefense >= DEAD_FOUR_SCORE)
+    level = std::max(level, 78);
+  else if (selectedAttack >= LIVE_THREE_SCORE ||
+           selectedDefense >= LIVE_THREE_SCORE)
+    level = std::max(level, 62);
+
+  return clampLevel(level);
+}
+
+bool GomokuEngine::hasUrgentThreat(const GameMove &move) const {
+  return scorePatternAt(move.x, move.y, move.player) >= DEAD_FOUR_SCORE;
+}
+
+int GomokuEngine::evaluatePlayer(int player) const {
+  int total = 0;
+
+  for (int i = 0; i < BOARD_SIZE; ++i) {
+    for (int j = 0; j < BOARD_SIZE; ++j) {
+      if (grid[i][j] == player)
+        total += scorePatternAt(i, j, player);
+      else if (grid[i][j] == EMPTY)
+        total += scoreMoveForPlayer(i, j, player) / 4;
     }
   }
-  if (blocks == 1)
-    baseScore /= 2;
-  return baseScore;
+  return total;
 }
 
 int GomokuEngine::evaluate(int aiPlayer) const {
   int opponent = (aiPlayer == WHITE) ? BLACK : WHITE;
-  int aiScore = 0;
-  int opponentScore = 0;
-  static const int dx[] = {1, 0, 1, 1};
-  static const int dy[] = {0, 1, 1, -1};
+  int aiScore = evaluatePlayer(aiPlayer);
+  int opponentScore = evaluatePlayer(opponent);
 
-  auto getScore = [&](int player, bool isAI) {
-    int total = 0;
-    for (int i = 0; i < BOARD_SIZE; ++i) {
-      for (int j = 0; j < BOARD_SIZE; ++j) {
-        if (grid[i][j] != player)
-          continue;
-        for (int k = 0; k < 4; ++k) {
-          int px = i - dx[k], py = j - dy[k];
-          if (px >= 0 && px < BOARD_SIZE && py >= 0 && py < BOARD_SIZE &&
-              grid[px][py] == player)
-            continue;
+  // Defense is weighted higher so the AI treats opponent live-four threats as
+  // emergencies instead of chasing a smaller attacking pattern.
+  return aiScore - opponentScore * 12 / 10;
+}
 
-          int count = 1, blocks = 0;
-          if (px < 0 || px >= BOARD_SIZE || py < 0 || py >= BOARD_SIZE ||
-              grid[px][py] != EMPTY)
-            blocks++;
-          int cx = i, cy = j;
-          while (true) {
-            cx += dx[k];
-            cy += dy[k];
-            if (cx >= 0 && cx < BOARD_SIZE && cy >= 0 && cy < BOARD_SIZE &&
-                grid[cx][cy] == player)
-              count++;
-            else
-              break;
-          }
-          if (cx < 0 || cx >= BOARD_SIZE || cy < 0 || cy >= BOARD_SIZE ||
-              grid[cx][cy] != EMPTY)
-            blocks++;
-          total += evaluateLine(count, blocks, isAI);
-        }
-      }
-    }
-    return total;
-  };
+int GomokuEngine::levelFromMoveScore(int selectedScore, int bestScore, int rank,
+                                     int moveCount) const {
+  if (bestScore <= 0)
+    return moveCount <= 2 ? 45 : 30;
 
-  aiScore = getScore(aiPlayer, true);
-  opponentScore = getScore(opponent, false);
-  return aiScore - opponentScore;
+  double ratio = static_cast<double>(selectedScore) / bestScore;
+  int rankPenalty = std::max(0, rank - 1) * 6;
+  int level = static_cast<int>(ratio * 92) + 8 - rankPenalty;
+
+  // Opening moves have many equivalent choices, so avoid over-punishing small
+  // positional differences before tactical patterns exist.
+  if (moveCount < 4)
+    level = std::max(level, 45);
+
+  return clampLevel(level);
 }

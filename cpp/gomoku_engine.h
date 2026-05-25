@@ -18,12 +18,23 @@ public:
   int getBoardWidth() const override { return 15; }
   int getBoardHeight() const override { return 15; }
   int getCell(int x, int y) const override;
+  int scoreMoveForPlayer(int x, int y, int player) const;
+  int estimateMoveLevel(int x, int y, int player) const;
+  bool hasUrgentThreat(const GameMove &move) const;
   void reset() override;
 
 private:
   int grid[15][15];
   int moveCount;
-  int evaluateLine(int count, int blocks, bool isAI) const;
+  int countDirection(int x, int y, int dx, int dy, int player) const;
+  int countDirectionWithMove(int x, int y, int dx, int dy, int player,
+                             int moveX, int moveY) const;
+  int scoreRun(int count, int openEnds) const;
+  int scorePatternAt(int x, int y, int player) const;
+  int scorePatternForMove(int x, int y, int player) const;
+  int evaluatePlayer(int player) const;
+  int levelFromMoveScore(int selectedScore, int bestScore, int rank,
+                         int moveCount) const;
 };
 
 #endif

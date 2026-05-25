@@ -58,9 +58,18 @@ public:
     return success;
   }
 
-  // Get AI move
-  val getAIMove(int depth) {
-    GameMove bestMove = ai->findBestMove(*engine, depth);
+  int estimateMoveLevel(int x, int y, int player) const {
+    const GomokuEngine *gomoku = dynamic_cast<const GomokuEngine *>(engine.get());
+    if (gomoku != nullptr) {
+      return gomoku->estimateMoveLevel(x, y, player);
+    }
+    return 50;
+  }
+
+  // Get AI move. Gomoku treats the argument as a 1-100 level; simpler games
+  // still map it back to a search depth inside MinimaxAI.
+  val getAIMove(int level) {
+    GameMove bestMove = ai->findBestMoveForLevel(*engine, level);
     val result = val::object();
     result.set("x", bestMove.x);
     result.set("y", bestMove.y);
@@ -69,8 +78,8 @@ public:
   }
 
   // Make AI move automatically
-  bool makeAIMove(int depth) {
-    GameMove bestMove = ai->findBestMove(*engine, depth);
+  bool makeAIMove(int level) {
+    GameMove bestMove = ai->findBestMoveForLevel(*engine, level);
     if (bestMove.x == -1 || bestMove.y == -1) {
       return false;
     }
@@ -119,6 +128,7 @@ EMSCRIPTEN_BINDINGS(game_module) {
       .function("getCell", &GameWrapper::getCell)
       .function("getBoard", &GameWrapper::getBoard)
       .function("makeMove", &GameWrapper::makeMove)
+      .function("estimateMoveLevel", &GameWrapper::estimateMoveLevel)
       .function("getAIMove", &GameWrapper::getAIMove)
       .function("makeAIMove", &GameWrapper::makeAIMove)
       .function("checkWin", &GameWrapper::checkWin)

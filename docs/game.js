@@ -10,6 +10,9 @@ class GameUI {
         this.currentPlayerText = document.getElementById('current-player');
         this.statusText = document.getElementById('game-status');
         this.difficultySelect = document.getElementById('ai-difficulty');
+        this.difficultyValue = document.getElementById('ai-difficulty-value');
+        this.lastMoveText = document.getElementById('last-move');
+        this.moveRatingText = document.getElementById('move-rating');
 
         this.gameType = 'gomoku';
         this.boardSize = 15;
@@ -21,6 +24,10 @@ class GameUI {
         this.isGameOver = false;
         this.isThinking = false;
         this.firstPlayer = 1; // 1 = Human (Black), 2 = AI (White)
+        this.lastMove = null;
+        this.currentGameRatings = [];
+        this.lastGameRating = null;
+        this.gameRatingHistory = this.loadGameRatingHistory();
 
         this.bindEvents();
         this.initTheme();
@@ -57,6 +64,10 @@ class GameUI {
 
         this.game = new this.module.GameWrapper(type);
         this.boardSize = this.game.getBoardWidth();
+        this.game.setFirstPlayer(this.firstPlayer);
+        this.lastMove = null;
+        this.currentGameRatings = [];
+        this.lastGameRating = null;
 
         this.setupCanvas();
         this.updateUI();
@@ -71,7 +82,8 @@ class GameUI {
     setupCanvas() {
         // Handle high DPI screens
         const dpr = window.devicePixelRatio || 1;
-        const size = Math.min(window.innerWidth - 80, 600);
+        const viewportWidth = window.visualViewport ? window.visualViewport.width : window.innerWidth;
+        const size = Math.max(280, Math.min(viewportWidth - 32, 600));
 
         this.canvas.style.width = size + 'px';
         this.canvas.style.height = size + 'px';
@@ -119,6 +131,10 @@ class GameUI {
             this.drawBoard();
         });
 
+        this.difficultySelect.addEventListener('input', () => {
+            this.updateDifficultyLabel();
+        });
+
         window.addEventListener('resize', () => {
             this.setupCanvas();
             this.drawBoard();
@@ -126,8 +142,18 @@ class GameUI {
     }
 
     initTheme() {
-        const savedTheme = localStorage.getItem('game-theme') || 'dark';
+        const savedTheme = localStorage.getItem('game-theme') || 'light';
         document.body.dataset.theme = savedTheme;
+    }
+
+    loadGameRatingHistory() {
+        try {
+            const rawHistory = localStorage.getItem('gomoku-game-rating-history');
+            return rawHistory ? JSON.parse(rawHistory) : [];
+        } catch (error) {
+            console.warn('评级历史读取失败，已重新开始记录', error);
+            return [];
+        }
     }
 
     handleCanvasClick(e) {
@@ -153,16 +179,20 @@ class GameUI {
 
     makeMove(x, y) {
         const player = this.game.getCurrentPlayer();
+        const moveLevel = this.game.estimateMoveLevel(x, y, player);
         const success = this.game.makeMove(x, y);
 
         if (success) {
+            this.lastMove = { x, y, player };
+            this.currentGameRatings.push(this.createMoveRatingSample(x, y, player, moveLevel));
+            this.updateLastMoveText();
             this.drawBoard();
             if (this.game.checkWin(x, y, player)) {
-                this.endGame(player === 1 ? '你赢了！' : 'AI 赢了！');
+                this.endGame(player === 1 ? '你赢了！' : 'AI 赢了！', player);
                 return;
             }
             if (this.game.isFull()) {
-                this.endGame('平局！');
+                this.endGame('平局！', 0);
                 return;
             }
 
@@ -187,10 +217,10 @@ class GameUI {
         // Use a small timeout to allow UI update
         await new Promise(r => setTimeout(r, 50));
 
-        const depth = parseInt(this.difficultySelect.value);
+        const level = parseInt(this.difficultySelect.value);
 
-        // Get AI move from WASM
-        const bestMove = this.game.getAIMove(depth);
+        // Get AI move from WASM. For Gomoku this is a 1-100 strength level.
+        const bestMove = this.game.getAIMove(level);
 
         this.isThinking = false;
         this.hideLoading();
@@ -204,8 +234,8 @@ class GameUI {
 
     drawBoard() {
         const isLight = document.body.dataset.theme === 'light';
-        const boardColor = isLight ? '#f3e5ab' : '#2a2a4a';
-        const lineColor = isLight ? '#8b4513' : '#4a4a6a';
+        const boardColor = isLight ? '#d8a85f' : '#b88446';
+        const lineColor = isLight ? '#5c3315' : '#3d2414';
 
         const size = this.displaySize;
         this.ctx.clearRect(0, 0, size, size);
@@ -252,6 +282,8 @@ class GameUI {
                 }
             }
         }
+
+        this.drawLastMoveMarker();
     }
 
     drawPiece(x, y, player) {
@@ -291,14 +323,114 @@ class GameUI {
         this.ctx.shadowOffsetY = 0;
     }
 
+    drawLastMoveMarker() {
+        if (!this.lastMove) return;
+
+        const centerX = this.gameType === 'gomoku'
+            ? this.padding + this.lastMove.x * this.cellSize
+            : this.padding + (this.lastMove.x + 0.5) * this.cellSize;
+        const centerY = this.gameType === 'gomoku'
+            ? this.padding + this.lastMove.y * this.cellSize
+            : this.padding + (this.lastMove.y + 0.5) * this.cellSize;
+        const radius = this.cellSize * 0.48;
+
+        this.ctx.save();
+        this.ctx.strokeStyle = '#ffb703';
+        this.ctx.lineWidth = Math.max(2, this.cellSize * 0.08);
+        this.ctx.beginPath();
+        this.ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        this.ctx.stroke();
+
+        // A tiny center dot keeps the last move visible on both black and white
+        // stones without hiding the piece itself.
+        this.ctx.fillStyle = '#ffb703';
+        this.ctx.beginPath();
+        this.ctx.arc(centerX, centerY, Math.max(2, this.cellSize * 0.09), 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.restore();
+    }
+
     updateUI() {
         const player = this.game.getCurrentPlayer();
         this.currentPlayerText.textContent = player === 1 ? '⚫ 黑方 (你)' : '⚪ 白方 (AI)';
         this.statusText.textContent = '进行中';
+        this.statusText.style.color = '';
+        this.updateDifficultyLabel();
+        this.updateLastMoveText();
+        this.updateMoveRatingText();
     }
 
-    endGame(msg) {
+    updateLastMoveText() {
+        this.lastMoveText.textContent = this.lastMove
+            ? `${this.lastMove.player === 1 ? '黑' : '白'} ${this.lastMove.x + 1}, ${this.lastMove.y + 1}`
+            : '暂无';
+    }
+
+    updateDifficultyLabel() {
+        this.difficultyValue.textContent = `${this.difficultySelect.value} 级`;
+    }
+
+    createMoveRatingSample(x, y, player, level) {
+        return {
+            player,
+            x,
+            y,
+            level,
+            moveNumber: this.currentGameRatings.length + 1
+        };
+    }
+
+    buildGameRatingRecord(winner) {
+        const summarizePlayer = (player) => {
+            const samples = this.currentGameRatings.filter(item => item.player === player);
+            if (samples.length === 0) {
+                return { player, playerName: player === 1 ? '黑方' : '白方', level: 0, moveCount: 0 };
+            }
+            const total = samples.reduce((sum, item) => sum + item.level, 0);
+            const level = Math.round(total / samples.length);
+            return {
+                player,
+                playerName: player === 1 ? '黑方' : '白方',
+                level,
+                moveCount: samples.length
+            };
+        };
+
+        return {
+            gameType: this.gameType,
+            winner,
+            black: summarizePlayer(1),
+            white: summarizePlayer(2),
+            moves: this.currentGameRatings,
+            createdAt: new Date().toISOString()
+        };
+    }
+
+    recordGameRating(record) {
+        this.gameRatingHistory.push(record);
+
+        // Keep local storage bounded so repeated games do not grow without
+        // limit. Recent 100 games are enough for reviewing strength trends.
+        if (this.gameRatingHistory.length > 100) {
+            this.gameRatingHistory = this.gameRatingHistory.slice(-100);
+        }
+        localStorage.setItem('gomoku-game-rating-history', JSON.stringify(this.gameRatingHistory));
+    }
+
+    updateMoveRatingText() {
+        if (!this.lastGameRating) {
+            this.moveRatingText.textContent = '结束后生成';
+            return;
+        }
+        this.moveRatingText.textContent =
+            `黑 ${this.lastGameRating.black.level} 级 / 白 ${this.lastGameRating.white.level} 级`;
+    }
+
+    endGame(msg, winner) {
         this.isGameOver = true;
+        this.lastGameRating = this.buildGameRatingRecord(winner);
+        this.recordGameRating(this.lastGameRating);
+        this.updateMoveRatingText();
         this.statusText.textContent = msg;
         this.statusText.style.color = 'var(--accent-secondary)';
         setTimeout(() => alert(msg), 100);
