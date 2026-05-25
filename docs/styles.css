@@ -314,6 +314,25 @@ body {
     transform: translateY(-2px);
 }
 
+.record-output {
+    display: none;
+    margin-top: 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-card);
+    color: var(--text-primary);
+    padding: 14px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 0.86rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.record-output.active {
+    display: block;
+}
+
 /* Footer */
 .footer {
     text-align: center;

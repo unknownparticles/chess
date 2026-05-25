@@ -20,6 +20,7 @@ class GameUI {
         this.settlementLevel = document.getElementById('settlement-level');
         this.settlementAILevel = document.getElementById('settlement-ai-level');
         this.settlementNextLevel = document.getElementById('settlement-next-level');
+        this.recordOutput = document.getElementById('record-output');
 
         this.gameType = 'gomoku';
         this.boardSize = 15;
@@ -33,6 +34,7 @@ class GameUI {
         this.firstPlayer = 1; // 1 = Human (Black), 2 = AI (White)
         this.lastMove = null;
         this.currentGameRatings = [];
+        this.moveRecord = [];
         this.lastGameRating = null;
         this.hideSettlement();
         this.gameRatingHistory = this.loadGameRatingHistory();
@@ -77,7 +79,9 @@ class GameUI {
         this.game.setFirstPlayer(this.firstPlayer);
         this.lastMove = null;
         this.currentGameRatings = [];
+        this.moveRecord = [];
         this.lastGameRating = null;
+        this.hideRecordOutput();
 
         this.setupCanvas();
         this.updateUI();
@@ -139,6 +143,10 @@ class GameUI {
             document.body.dataset.theme = theme;
             localStorage.setItem('game-theme', theme);
             this.drawBoard();
+        });
+
+        document.getElementById('export-record-btn').addEventListener('click', () => {
+            this.exportMoveRecord();
         });
 
         this.difficultySelect.addEventListener('input', () => {
@@ -230,6 +238,7 @@ class GameUI {
         if (success) {
             this.lastMove = { x, y, player };
             this.currentGameRatings.push(this.createMoveRatingSample(x, y, player, moveLevel));
+            this.recordMove(x, y, player, moveLevel);
             this.updateLastMoveText();
             this.drawBoard();
             if (this.game.checkWin(x, y, player)) {
@@ -423,6 +432,92 @@ class GameUI {
             level,
             moveNumber: this.currentGameRatings.length + 1
         };
+    }
+
+    recordMove(x, y, player, level) {
+        this.moveRecord.push({
+            moveNumber: this.moveRecord.length + 1,
+            player,
+            playerName: player === 1 ? '黑' : '白',
+            x,
+            y,
+            row: y + 1,
+            col: x + 1,
+            level,
+            aiLevel: parseInt(this.difficultySelect.value, 10),
+            createdAt: new Date().toISOString()
+        });
+    }
+
+    buildMoveRecordText() {
+        const aiLevel = parseInt(this.difficultySelect.value, 10);
+        const board = this.game ? this.game.getBoard() : [];
+        const lines = [
+            `棋类: ${this.gameType}`,
+            `棋盘: ${this.boardSize}x${this.boardSize}`,
+            `AI等级: ${aiLevel}`,
+            `先手: ${this.firstPlayer === 1 ? '黑方(玩家)' : '白方(AI)'}`,
+            `当前玩家: ${this.game.getCurrentPlayer() === 1 ? '黑' : '白'}`,
+            `是否结束: ${this.isGameOver ? '是' : '否'}`,
+            `生成时间: ${new Date().toISOString()}`,
+            '',
+            '棋谱:',
+        ];
+
+        if (this.moveRecord.length === 0) {
+            lines.push('暂无落子');
+        } else {
+            this.moveRecord.forEach(move => {
+                const side = move.player === this.game.getAIPlayer() ? 'AI' : '玩家';
+                lines.push(
+                    `${move.moveNumber}. ${move.playerName}(${side}) ` +
+                    `${move.col},${move.row} [x=${move.x}, y=${move.y}, 评级=${move.level}]`
+                );
+            });
+        }
+
+        lines.push('', '棋盘快照:');
+        for (let row = 0; row < this.boardSize; row++) {
+            const values = [];
+            for (let col = 0; col < this.boardSize; col++) {
+                const cell = board[row * this.boardSize + col];
+                values.push(cell === 1 ? 'B' : cell === 2 ? 'W' : '.');
+            }
+            lines.push(values.join(' '));
+        }
+
+        lines.push('', 'JSON:');
+        lines.push(JSON.stringify({
+            gameType: this.gameType,
+            boardSize: this.boardSize,
+            aiLevel,
+            firstPlayer: this.firstPlayer,
+            currentPlayer: this.game.getCurrentPlayer(),
+            isGameOver: this.isGameOver,
+            moves: this.moveRecord,
+            board
+        }, null, 2));
+
+        return lines.join('\n');
+    }
+
+    async exportMoveRecord() {
+        const text = this.buildMoveRecordText();
+        this.recordOutput.textContent = '棋谱已生成，正在复制到剪贴板...';
+        this.recordOutput.classList.add('active');
+
+        try {
+            await navigator.clipboard.writeText(text);
+            this.recordOutput.textContent = `棋谱已复制到剪贴板。\n\n${text}`;
+        } catch (error) {
+            console.warn('棋谱复制失败，已显示文本供手动复制', error);
+            this.recordOutput.textContent = `棋谱复制失败，请手动复制以下内容：\n\n${text}`;
+        }
+    }
+
+    hideRecordOutput() {
+        this.recordOutput.textContent = '';
+        this.recordOutput.classList.remove('active');
     }
 
     buildGameRatingRecord(winner) {
