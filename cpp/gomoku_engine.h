@@ -4,9 +4,11 @@
 #include "engine.h"
 #include <vector>
 
-class GomokuEngine : public GameEngine {
+class GomokuEngine : public GameEngine
+{
 public:
   GomokuEngine();
+
   std::vector<GameMove> getPossibleMoves() const override;
   bool makeMove(const GameMove &move) override;
   void undoMove(const GameMove &move) override;
@@ -18,9 +20,15 @@ public:
   int getBoardWidth() const override { return 15; }
   int getBoardHeight() const override { return 15; }
   int getCell(int x, int y) const override;
+
   int scoreMoveForPlayer(int x, int y, int player) const;
   int estimateMoveLevel(int x, int y, int player) const;
   bool hasUrgentThreat(const GameMove &move) const;
+
+  // 新增：战术硬判断
+  bool isDoubleThreatMove(int x, int y, int player) const;
+  bool allowsOpponentDoubleThreat(const GameMove &move, int aiPlayer);
+
   void reset() override;
 
 private:
